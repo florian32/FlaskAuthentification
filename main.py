@@ -30,15 +30,20 @@ class User(UserMixin, db.Model):
 # Line below only required once, when creating DB.
 # db.create_all()
 
-
 @app.route('/')
 def home():
-    return render_template("index.html")
+    # Every render_template has a logged_in variable set.
+    return render_template("index.html", logged_in=current_user.is_authenticated)
 
 
 @app.route('/register', methods=["POST", "GET"])
 def register():
     if request.method == "POST":
+        if User.query.filter_by(email=request.form.get('email')).first():
+            # User already exists
+            flash("You've already signed up with that email, log in instead!")
+            return redirect(url_for('login'))
+
         hash_and_salted_password = generate_password_hash(
             request.form.get('password'),
             method='pbkdf2:sha256',
@@ -56,7 +61,7 @@ def register():
         login_user(new_user)
 
         return render_template("secrets.html", name=new_user.name)
-    return render_template("register.html")
+    return render_template("register.html", logged_in=current_user.is_authenticated)
 
 
 @app.route('/login', methods=["GET", "POST"])
@@ -68,19 +73,27 @@ def login():
         # Find user by email entered.
         user = User.query.filter_by(email=email).first()
 
+        if not user:
+            flash("That email does not exist, please try again.")
+            return redirect(url_for('login'))
+
         # Check stored password hash against entered password hashed.
         if check_password_hash(user.password, password):
             login_user(user)
             return redirect(url_for('secrets'))
 
-    return render_template("login.html")
+        elif not check_password_hash(user.password, password):
+            flash('Password incorrect, please try again.')
+            return redirect(url_for('login'))
+
+    return render_template("login.html", logged_in=current_user.is_authenticated)
 
 
 @app.route('/secrets')
 @login_required
 def secrets():
     print(current_user.name)
-    return render_template("secrets.html", name=current_user.name)
+    return render_template("secrets.html", name=current_user.name, logged_in=True)
 
 
 @app.route('/logout')
